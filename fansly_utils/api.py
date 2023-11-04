@@ -7,6 +7,8 @@ from requests import Session
 from requests.exceptions import HTTPError
 
 if TYPE_CHECKING:
+    from logging import Logger
+
     from requests import Response
 
 __all__ = ["FanslyApi", "chunks", "offset"]
@@ -32,6 +34,10 @@ class _Session(Session):
 
         self._logger = logging.getLogger("FanslyAPI")
         self._urls_cache: dict[str, str] = {}
+
+    @property
+    def logger(self) -> "Logger":
+        return self._logger
 
     def request(self, method, url, *args, **kwargs):
         # Some Angular stuff (https://angular.io/guide/service-worker-devops)
@@ -439,25 +445,33 @@ class _FanslyUserPaymentsApi:
         response = self._session.get_json("/account/wallets/transactions", params=params)
 
         result: list[dict] = []
-        for obj in response:
+        for obj in response["data"]:
+            transaction_id = obj["transactionId"]
+            self._session.logger.debug("Processing payment with %s transaction id", transaction_id)
+
             product_order = obj.get("productOrder")
             if not product_order:  # it's a balance purchase
                 continue
 
             items = product_order["items"]
+            assert len(items) == 1
+            items = items[0]
 
             metadata = items.get("metadata")
             if not metadata:  # it's a tip
                 account_id = items["productId"]
             else:  # it's a paid something
-                account_id = json.loads(metadata)["accountId"]
+                metadata = json.loads(metadata)
+                account_id = metadata.get("accountId")
+                if not account_id:
+                    account_id = metadata["authorId"]  # it's a locked text
 
             result.append(
                 {
-                    "id": account_id,
-                    "createdAt": items["createdAt"],  # unix timestamp in milliseconds
+                    "accountId": account_id,
+                    "createdAt": product_order["createdAt"],  # unix timestamp in milliseconds
                     "price": items["productPrice"],  # price is multiplied by 1000,
-                    "transactionId": obj["transactionId"],
+                    "transactionId": transaction_id,
                 }
             )
 

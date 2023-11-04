@@ -63,7 +63,7 @@ def backup(api: "FanslyApi", logger: "Logger", db_file: "Path", update: bool) ->
     logger.info("Backup all available payments...")
     for payments_chunk in offset(lambda kwarg: api.user().payments().get_all(**kwarg)):
         payments.extend(payments_chunk)
-        accounts_ids |= set(extract_ids(payments_chunk))
+        accounts_ids |= set(extract_ids(payments_chunk, key="accountId"))
 
     logger.info("Found %s payments!", len(following))
 
@@ -115,7 +115,7 @@ def backup(api: "FanslyApi", logger: "Logger", db_file: "Path", update: bool) ->
             old_tid = old_payment_info["transactionId"]
             payment_info = find_by(lists, key="transactionId", value=old_tid)
             if not payment_info:
-                logger.debug("Adding payment '%s' transaction id", old_list_label)
+                logger.debug("Adding payment with '%s' transaction id", old_list_label)
                 lists.append(old_payment_info)
 
     # dump

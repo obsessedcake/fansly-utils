@@ -1,5 +1,5 @@
 from argparse import ArgumentDefaultsHelpFormatter, ArgumentParser
-from enum import IntEnum
+from enum import IntEnum, auto
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -22,9 +22,9 @@ def _to_log_level(value: str) -> str:
 
 
 class FileType(IntEnum):
-    NONE = (1,)
-    INPUT = (2,)
-    OUTPUT = 3
+    NONE = auto()
+    INPUT = auto()
+    OUTPUT = auto()
 
 
 _DEFAULT_FILE: Path = Path("fansly-backup.json")
@@ -34,7 +34,7 @@ def _add_parser(
     subparsers: "_SubParsersAction[ArgumentParser]",
     name: str,
     help: str,
-    file_type: FileType = FileType.OUTPUT,
+    file_type: FileType = FileType.INPUT,
 ) -> ArgumentParser:
     parser = subparsers.add_parser(
         name, help=help, description=help, formatter_class=ArgumentDefaultsHelpFormatter
@@ -92,19 +92,20 @@ def get_cli_arg_parser() -> ArgumentParser:
     # backup
 
     backup = _add_parser(
-        subparsers, "backup", "Backup followings, notes and user lists.", FileType.INPUT
+        subparsers, "backup", "Backup followings, notes and user lists.", FileType.OUTPUT
     )
     backup.add_argument(
         "--html",
         help="Generate a simple HTML table to visualize saved data.",
         action="store_true",
     )
-    backup.add_argument(
+    backup_update = backup.add_mutually_exclusive_group()
+    backup_update.add_argument(
         "--only-update-accounts",
-        help="Only updated information of saved accounts and skip anything else.",
+        help="Only update information of saved accounts and skip anything else.",
         action="store_true",
     )
-    backup.add_argument(
+    backup_update.add_argument(
         "-u",
         "--update",
         help="Update existing database if any.",
@@ -147,5 +148,25 @@ def get_cli_arg_parser() -> ArgumentParser:
     # html
 
     _add_parser(subparsers, "html", "Generate a simple HTML table to visualize saved data.")
+
+    # payments
+
+    payments = _add_parser(subparsers, "payments", "Get information about your payments.")
+    payments_processors = payments.add_mutually_exclusive_group(required=True)
+    payments_processors.add_argument(
+        "--by-accounts",
+        help="Calculate total spending for each creator.",
+        action="store_true",
+    )
+    payments_processors.add_argument(
+        "--by-years",
+        help="Calculate total spending by years",
+        action="store_true",
+    )
+    payments_processors.add_argument(
+        "--total",
+        help="Calculate total spending starting from your first payment.",
+        action="store_true",
+    )
 
     return parser
