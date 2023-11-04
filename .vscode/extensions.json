@@ -1,0 +1,12 @@
+{
+    "recommendations": [
+        "DavidAnson.vscode-markdownlint",
+        "eamodio.gitlens",
+        "ms-python.black-formatter",
+        "ms-python.flake8",
+        "ms-python.isort",
+        "ms-python.python",
+        "ms-python.vscode-pylance",
+        "streetsidesoftware.code-spell-checker",
+    ]
+}

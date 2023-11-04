@@ -1,1 +1,1 @@
-from .api import FanslyApi, chunks, offset
+from .api import FanslyApi, chunks, offset  # noqa: F401

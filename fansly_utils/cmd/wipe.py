@@ -1,7 +1,7 @@
 from typing import TYPE_CHECKING
 
-from .utils import extract_ids
 from ..api import chunks, offset
+from .utils import extract_ids
 
 if TYPE_CHECKING:
     from logging import Logger
@@ -62,7 +62,11 @@ def wipe(api: "FanslyApi", logger: "Logger", no_warning: bool) -> None:
             if not notes:
                 continue
 
-            logger.debug("Wiping %s note(s) from '%s' account...", len(notes), account["username"])
+            logger.debug(
+                "Wiping %s note(s) from '%s' account...",
+                len(notes),
+                account["username"],
+            )
             for note in notes:
                 api.user().notes().delete(
                     account_id=account["id"],

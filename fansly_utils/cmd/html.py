@@ -12,8 +12,7 @@ __all__ = ["generate_html"]
 
 def _render(html_template: str, data: dict, output: "Path") -> None:
     env = Environment(
-        autoescape=select_autoescape(),
-        loader=PackageLoader(__package__.split(".")[0])
+        autoescape=select_autoescape(), loader=PackageLoader(__package__.split(".")[0])
     )
     template = env.get_template(html_template)
     template.stream(**data).dump(str(output))
@@ -30,24 +29,22 @@ def _generate_html_table(db_file: "Path", data: dict) -> None:
         for list_info in data["lists"]:
             row.append(contains(list_info["items"], account_id))
 
-        rows.append({
-            "id": account_id,
-            "username": account_info["username"],
-            "deleted": contains(data["deleted"], account_id),
-            "data": row,
-            "notes": account_info["notes"],
-            "oldNames": account_info["oldNames"],
-        })
+        rows.append(
+            {
+                "id": account_id,
+                "username": account_info["username"],
+                "deleted": contains(data["deleted"], account_id),
+                "data": row,
+                "notes": account_info["notes"],
+                "oldNames": account_info["oldNames"],
+            }
+        )
 
     labels = ["Following"]
     for list_info in data["lists"]:
         labels.append(list_info["label"])
 
-    _render(
-        "table.html",
-        data=dict(labels=labels, rows=rows),
-        output=db_file.with_suffix(".html")
-    )
+    _render("table.html", data=dict(labels=labels, rows=rows), output=db_file.with_suffix(".html"))
 
 
 def _generate_html_charts(db_file: "Path", data: dict) -> None:

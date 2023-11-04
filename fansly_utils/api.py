@@ -1,10 +1,10 @@
-from functools import cache
-from itertools import islice
-from typing import TYPE_CHECKING, Any, Callable, Iterable, Iterator
 import json
 import logging
+from itertools import islice
+from typing import TYPE_CHECKING, Any, Callable, Iterable, Iterator
 
 from requests import Session
+from requests.exceptions import HTTPError
 
 if TYPE_CHECKING:
     from requests import Response
@@ -20,13 +20,15 @@ DEFAULT_LIMIT_VALUE: int = 100
 class _Session(Session):
     def __init__(self, authorization_token: str, user_agent: str) -> None:
         super().__init__()
-        self.headers.update({
-            "Accept": "application/json, text/plain, */*",
-            "Referer": "https://fansly.com/",
-            "accept-language": "en-US,en;q=0.9",
-            "authorization": authorization_token,
-            "User-Agent": user_agent,
-        })
+        self.headers.update(
+            {
+                "Accept": "application/json, text/plain, */*",
+                "Referer": "https://fansly.com/",
+                "accept-language": "en-US,en;q=0.9",
+                "authorization": authorization_token,
+                "User-Agent": user_agent,
+            }
+        )
 
         self._logger = logging.getLogger("FanslyAPI")
         self._urls_cache: dict[str, str] = {}
@@ -73,7 +75,7 @@ class _Session(Session):
             response.raise_for_status()
             if self._logger.level == logging.DEBUG:
                 self._log_response(response)
-        except:
+        except HTTPError:
             self._log_response(response, is_error=True)
             self._logger.error("Request has failed with error:", response.json())
             raise
@@ -103,11 +105,9 @@ class FanslyApi:
     def __init__(self, *, authorization_token: str, user_agent: str) -> None:
         self._session = _Session(authorization_token, user_agent)
 
-    @cache
     def accounts(self) -> "_FanslyAccountApi":
         return _FanslyAccountApi(self._session)
 
-    @cache
     def user(self) -> "_FanslyUserApi":
         return _FanslyUserApi(self, self._session)
 
@@ -137,11 +137,15 @@ class _FanslyAccountApi:
         else:
             params = {"usernames": [username]}
 
-        response = self.get_batch(**params, brief = brief)
+        response = self.get_batch(**params, brief=brief)
         return response[0] if response else None
 
     def get_batch(
-        self, *, accounts_ids: Iterable[str] | None = None, usernames: Iterable[str] | None = None, brief: bool = True
+        self,
+        *,
+        accounts_ids: Iterable[str] | None = None,
+        usernames: Iterable[str] | None = None,
+        brief: bool = True,
     ) -> list[dict]:
         """
         Get accounts information in a batch
@@ -167,19 +171,23 @@ class _FanslyAccountApi:
         for account_info in response:
             notes_info: list[dict] = []
             for note_info in account_info.get("notes", []):
-                notes_info.append({
-                    "id": note_info["id"],
-                    "title": note_info["title"],
-                    "data": note_info["note"],
-                    "createdAt": note_info["createdAt"],
-                    "updatedAt": note_info["updatedAt"],
-                })
-            result.append({
-                "id": account_info["id"],
-                "username": account_info["username"],
-                "displayName": account_info.get("displayName"),
-                "notes": notes_info,
-            })
+                notes_info.append(
+                    {
+                        "id": note_info["id"],
+                        "title": note_info["title"],
+                        "data": note_info["note"],
+                        "createdAt": note_info["createdAt"],
+                        "updatedAt": note_info["updatedAt"],
+                    }
+                )
+            result.append(
+                {
+                    "id": account_info["id"],
+                    "username": account_info["username"],
+                    "displayName": account_info.get("displayName"),
+                    "notes": notes_info,
+                }
+            )
         return result
 
 
@@ -193,39 +201,30 @@ class _FanslyUserApi:
         self._root_api = root_api
         self._session = session
 
-    @cache
     def id(self) -> str:
         return self._session.get_json("/account/me")["account"]["id"]
 
-    @cache
     def name(self) -> str:
         return self._session.get_json("/account/me")["account"]["username"]
 
-    @cache
     def followers(self) -> "_FanslyUserFollowersApi":
         return _FanslyUserFollowersApi(self._session)
 
-    @cache
     def following(self) -> "_FanslyUserFollowingApi":
         return _FanslyUserFollowingApi(self._root_api, self._session)
 
-    @cache
     def lists(self) -> "_FanslyUserListsApi":
         return _FanslyUserListsApi(self._root_api, self._session)
 
-    @cache
     def media(self) -> "_FanslyUserMediaApi":
         return _FanslyUserMediaApi(self._session)
 
-    @cache
     def notes(self) -> "_FanslyUserNotesApi":
         return _FanslyUserNotesApi(self._root_api, self._session)
 
-    @cache
     def payments(self) -> "_FanslyUserPaymentsApi":
         return _FanslyUserPaymentsApi(self._session)
 
-    @cache
     def subscriptions(self) -> "_FanslyUserSubscriptionsApi":
         return _FanslyUserSubscriptionsApi(self._session)
 
@@ -290,17 +289,16 @@ class _FanslyUserListsApi:
 
         result: list[dict] = []
         for list_info in response:
-            result.append({
-                "id": list_info["id"],
-                "label": list_info["label"],
-            })
+            result.append(
+                {
+                    "id": list_info["id"],
+                    "label": list_info["label"],
+                }
+            )
         return result
 
     def add_list(self, label: str, description: str = "") -> str:
-        data = {
-            "label": label,
-            "description": description
-        }
+        data = {"label": label, "description": description}
         self._session.post_json("/lists", json=data)["id"]
 
     def delete_list(self, list_id: str | None = None) -> None:
@@ -312,8 +310,7 @@ class _FanslyUserListsApi:
 
         **UI path:** Account -> Lists -> <List Name>.
         """
-
-        response =  self._session.get_json("/lists/items", params={"listId": list_id})
+        response = self._session.get_json("/lists/items", params={"listId": list_id})
         return [obj["id"] for obj in response]
 
     def add_list_item(self, *, list_id: str, account_id: str) -> None:
@@ -336,13 +333,15 @@ class _FanslyUserListsApi:
 
         commands: list[dict] = []
         for account_id in accounts_ids:
-            commands.append({
-                "listItem": {
-                    "id": account_id,
-                    "listId": list_id,
-                },
-                "type": 1,
-            })
+            commands.append(
+                {
+                    "listItem": {
+                        "id": account_id,
+                        "listId": list_id,
+                    },
+                    "type": 1,
+                }
+            )
 
         self._session.post_json("/lists/commands", json={"listCommands": commands})
 
@@ -363,10 +362,7 @@ class _FanslyUserListsApi:
         if not accounts_ids:
             return
 
-        data = {
-            "listId": list_id,
-            "listItemIds": accounts_ids
-        }
+        data = {"listId": list_id, "listItemIds": accounts_ids}
         self._session.post_json("/lists/items/remove", json=data)
 
 
@@ -383,13 +379,10 @@ class _FanslyUserMediaPurchasesApi:
         self._session = session
 
     def get_all_accounts(self) -> list[str]:
-        response = self._session.get("/uservault/albumsnew", params={"accountId": ""})
-        aggregation_data = response["aggregationData"]["accountMedia"]
+        # response = self._session.get("/uservault/albumsnew", params={"accountId": ""})
+        # aggregation_data = response["aggregationData"]["accountMedia"]
 
-        for data in aggregation_data:
-            pass  # TODO
-
-        return []  # TODO
+        return []  # TODO(obsessedcake): Implement this.
 
 
 class _FanslyUserNotesApi:
@@ -431,6 +424,7 @@ class _FanslyUserNotesApi:
         }
         self._session.post_json("/notes/delete", json=data)
 
+
 class _FanslyUserPaymentsApi:
     def __init__(self, session: _Session) -> None:
         self._session = session
@@ -458,12 +452,14 @@ class _FanslyUserPaymentsApi:
             else:  # it's a paid something
                 account_id = json.loads(metadata)["accountId"]
 
-            result.append({
-                "id": account_id,
-                "createdAt": items["createdAt"],  # unix timestamp in milliseconds
-                "price": items["productPrice"],  # price is multiplied by 1000,
-                "transactionId": obj["transactionId"],
-            })
+            result.append(
+                {
+                    "id": account_id,
+                    "createdAt": items["createdAt"],  # unix timestamp in milliseconds
+                    "price": items["productPrice"],  # price is multiplied by 1000,
+                    "transactionId": obj["transactionId"],
+                }
+            )
 
         return result
 

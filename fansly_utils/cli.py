@@ -2,7 +2,6 @@ from argparse import ArgumentDefaultsHelpFormatter, ArgumentParser
 from enum import IntEnum
 from pathlib import Path
 from typing import TYPE_CHECKING
-import os
 
 if TYPE_CHECKING:
     from argparse import _SubParsersAction
@@ -23,8 +22,8 @@ def _to_log_level(value: str) -> str:
 
 
 class FileType(IntEnum):
-    NONE = 1,
-    INPUT = 2,
+    NONE = (1,)
+    INPUT = (2,)
     OUTPUT = 3
 
 
@@ -35,13 +34,11 @@ def _add_parser(
     subparsers: "_SubParsersAction[ArgumentParser]",
     name: str,
     help: str,
-    file_type: FileType = FileType.OUTPUT
+    file_type: FileType = FileType.OUTPUT,
 ) -> ArgumentParser:
     parser = subparsers.add_parser(
-        name,
-        help=help,
-        description=help,
-        formatter_class=ArgumentDefaultsHelpFormatter)
+        name, help=help, description=help, formatter_class=ArgumentDefaultsHelpFormatter
+    )
 
     if file_type == FileType.INPUT:
         parser.add_argument(
@@ -86,16 +83,17 @@ def _add_parser(
     return parser
 
 
-
 def get_cli_arg_parser() -> ArgumentParser:
     parser = ArgumentParser(
         description="A set of useful utils for dumping, restoring and wiping your fansly.com account data."
     )
-    subparsers = parser.add_subparsers(dest='command')
+    subparsers = parser.add_subparsers(dest="command")
 
     # backup
 
-    backup = _add_parser(subparsers, "backup", "Backup followings, notes and user lists.", FileType.INPUT)
+    backup = _add_parser(
+        subparsers, "backup", "Backup followings, notes and user lists.", FileType.INPUT
+    )
     backup.add_argument(
         "--html",
         help="Generate a simple HTML table to visualize saved data.",
@@ -119,7 +117,12 @@ def get_cli_arg_parser() -> ArgumentParser:
 
     # wipe
 
-    wipe = _add_parser(subparsers, "wipe", "Wipe all comments, followings, likes, notes and user lists.", FileType.NONE)
+    wipe = _add_parser(
+        subparsers,
+        "wipe",
+        "Wipe all comments, followings, likes, notes and user lists.",
+        FileType.NONE,
+    )
     wipe.add_argument(
         "-s",
         "--silent",
