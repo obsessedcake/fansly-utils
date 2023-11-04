@@ -8,7 +8,16 @@ from rich.logging import RichHandler
 
 from .api import FanslyApi
 from .cli import get_cli_arg_parser
-from .cmd import backup, generate_html, get_account_info, restore, update_accounts, wipe
+from .cmd import (
+    PaymentsProcessor,
+    backup,
+    generate_html,
+    get_account_info,
+    process_payments,
+    restore,
+    update_accounts,
+    wipe,
+)
 
 if TYPE_CHECKING:
     from argparse import Namespace
@@ -49,9 +58,10 @@ def main() -> None:
     try:
         if args.command == "backup":
             if not args.only_update_accounts:
-                update_accounts(api, logger, args.file)
-            else:
                 backup(api, logger, args.file, args.update)
+
+            if args.update:
+                update_accounts(api, logger, args.file)
 
             if args.html:
                 generate_html(args.file)
@@ -63,6 +73,13 @@ def main() -> None:
             generate_html(args.file)
         elif args.command == "info":
             get_account_info(api, args.id, args.raw)
+        elif args.command == "payments":
+            if args.by_accounts:
+                process_payments(args.file, PaymentsProcessor.BY_ACCOUNTS)
+            elif args.by_years:
+                process_payments(args.file, PaymentsProcessor.BY_YEARS)
+            elif args.total:
+                process_payments(args.file, PaymentsProcessor.TOTAL)
     except HTTPError:
         pass  # NOTE(obsessedcake): Should be already logged on FanslyApi side.
     except Exception:

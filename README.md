@@ -11,9 +11,11 @@ A set of useful utils for dumping, restoring and wiping your [fansly.com](fansly
   - [Package](#package)
   - [Command Line Tool](#command-line-tool)
     - [Backup](#backup)
-      - [Data visualization](#data-visualization)
     - [Restore](#restore)
     - [Wipe](#wipe)
+- [Data visualization](#data-visualization)
+  - [Lists](#lists)
+  - [Payments](#payments)
 - [Notes](#notes)
 
 ## Preface
@@ -106,18 +108,6 @@ Next time you run `backup` command, you can add `-u` switch to update the existi
 fansly-utils backup -u
 ```
 
-##### Data visualization
-
-You can also generate a beautiful HTML table will all accounts and lists to which they are assigned:
-
-```bash
-fansly-utils backup --html
-# or as a separate sub-command:
-fansly-utils html
-```
-
-![lists table](.imgs/lists-table.png)
-
 #### Restore
 
 If you have successfully [backup](#backup) all your account's data, you can then restore it using this command:
@@ -159,6 +149,30 @@ The following actions will be performed:
 > 1. Even if this really works, there will be some backups of their databases.
 > 2. Also there is no way to delete your transaction history, so they still will keep your e-mail and other data for some time if not forever.
 > 3. Moreover there is no way to prune your data related to deleted accounts.
+
+## Data visualization
+
+### Lists
+
+You can generate a beautiful HTML table will all accounts and lists to which they are assigned:
+
+```bash
+fansly-utils backup --html
+# or as a separate sub-command:
+fansly-utils html
+```
+
+![lists table](.imgs/lists-table.png)
+
+### Payments
+
+You can generate simple text reports for your payments:
+
+```bash
+fansly-utils payments --by-accounts
+fansly-utils payments --by-years
+fansly-utils payments --years
+```
 
 ## Notes
 

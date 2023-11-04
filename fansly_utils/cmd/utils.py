@@ -57,5 +57,5 @@ def merge_lists(lhs: list[str], rhs: list[str]) -> list[str]:
     return list(set(lhs) | set(rhs))
 
 
-def extract_ids(iterable: Iterable[dict]) -> list[str]:
-    return [o["id"] for o in iterable]
+def extract_ids(iterable: Iterable[dict], *, key: str = "id") -> list[str]:
+    return [o[key] for o in iterable]

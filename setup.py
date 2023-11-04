@@ -8,9 +8,11 @@ fansly.com account data.
 """
 
 install_requires = [
+    "inflect>=7.0.0",
     "jinja2",
+    "python-dateutil>=2.8.2",
     "requests>=2.26.0",
-    "rich",
+    "rich>=13.0.0",
 ]
 
 extras_require = {
