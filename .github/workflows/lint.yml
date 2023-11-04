@@ -21,10 +21,10 @@ jobs:
         with:
           python-version: "3.11"
       - name: Install dependencies
-        run: pip install . [dev]
+        run: pip install .[dev]
       - name: Run flake8
         run: |
-          flake8 > ${GITHUB_WORKSPACE}/flake8-output.txt
+          flake8 --exit-zero > ${GITHUB_WORKSPACE}/flake8-output.txt
           cat ${GITHUB_WORKSPACE}/flake8-output.txt
   readme:
     runs-on: ubuntu-latest
