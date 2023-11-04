@@ -1,4 +1,4 @@
-from pprint import pformat
+import json
 from typing import TYPE_CHECKING
 
 from rich import print
@@ -16,4 +16,4 @@ def get_account_info(api: "FanslyApi", id: str, raw: bool) -> None:
     else:
         info = api.accounts().get(username=id, brief=brief)
 
-    print(pformat(info, indent=4))
+    print(json.dumps(info, indent=4, sort_keys=True))
