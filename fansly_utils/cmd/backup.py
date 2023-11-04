@@ -34,12 +34,14 @@ def backup(api: "FanslyApi", logger: "Logger", db_file: "Path", update: bool) ->
         list_info["items"] = items
         lists.append(list_info)
 
+    logger.info("Processed %s lists!", len(lists))
     logger.info("Backup a list of accounts that the user follows...")
 
     for ids in offset(lambda kwarg: api.user().following().get_all(**kwarg)):
         following.extend(ids)
         accounts_ids |= set(ids)
 
+    logger.info("Found %s accounts that the user follows!", len(following))
     logger.info("Backup all available accounts info...")
 
     for chunk in chunks(accounts_ids):
@@ -60,6 +62,8 @@ def backup(api: "FanslyApi", logger: "Logger", db_file: "Path", update: bool) ->
     for payments_chunk in offset(lambda kwarg: api.user().payments().get_all(**kwarg)):
         payments.extend(payments_chunk)
         accounts_ids |= set(extract_ids(payments_chunk))
+
+    logger.info("Found %s payments!", len(following))
 
     # update data
 
@@ -113,15 +117,6 @@ def backup(api: "FanslyApi", logger: "Logger", db_file: "Path", update: bool) ->
                 lists.append(old_payment_info)
 
     # dump
-
-    logger.info(
-        "Found %s accounts, %s deleted accounts, %s followings, %s lists and %s payments.",
-        len(accounts),
-        len(deleted),
-        len(following),
-        len(lists),
-        len(payments),
-    )
 
     backup_data = {
         "accounts": accounts,
