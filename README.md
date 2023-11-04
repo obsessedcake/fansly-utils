@@ -95,6 +95,8 @@ fansly-utils backup
 fansly-utils backup -c my-config.ini my-fansly-backup.json
 ```
 
+![backup](.imgs/backup.png)
+
 Above command will extract following data from your account:
 
 - all followed accounts,
