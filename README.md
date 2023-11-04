@@ -173,7 +173,7 @@ You can generate simple text reports for your payments:
 ```bash
 fansly-utils payments --by-accounts
 fansly-utils payments --by-years
-fansly-utils payments --years
+fansly-utils payments --total
 ```
 
 ## Notes
