@@ -1,7 +1,7 @@
 from typing import TYPE_CHECKING
 
-from .utils import contains, extract_ids, load_backup
 from ..api import chunks
+from .utils import contains, extract_ids, load_backup
 
 if TYPE_CHECKING:
     from logging import Logger
@@ -17,10 +17,10 @@ def restore(api: "FanslyApi", logger: "Logger", db_file: "Path") -> None:
     data = load_backup(db_file)
 
     logger.debug("Removing dead accounts from followings...")
-    following = list(filter(lambda aid: not contains(data["deleted"], aid), following))
+    following = list(filter(lambda aid: not contains(data["deleted"], aid), data["following"]))
 
     logger.info("Re-following all previously followed accounts...")
-    for account_id in data["following"]:
+    for account_id in following:
         api.user().following().follow(account_id)
 
     logger.info("Recreating all user lists...")
@@ -47,11 +47,7 @@ def restore(api: "FanslyApi", logger: "Logger", db_file: "Path") -> None:
             continue
 
         logger.info("Adding %s note(s) to '%s' account...", len(notes), account["username"])
-        api.user().notes().add(
-            account_id=account["id"],
-            title=notes["title"],
-            data=notes["data"]
-        )
+        api.user().notes().add(account_id=account["id"], title=notes["title"], data=notes["data"])
 
     logger.info("Checking accounts...")
 

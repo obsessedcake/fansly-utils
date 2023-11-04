@@ -7,7 +7,7 @@ description = """A set of useful utils for dumping, restoring and wiping your
 fansly.com account data.
 """
 
-install_requires=[
+install_requires = [
     "jinja2",
     "requests>=2.26.0",
     "rich",
@@ -32,11 +32,7 @@ setup(
     long_description=long_description,
     url="https://github.com/obsessedcake",
     packages=find_packages(),
-    entry_points = {
-        "console_scripts": [
-            "fansly-utils=fansly_utils.run:main"
-        ]
-    },
+    entry_points={"console_scripts": ["fansly-utils=fansly_utils.run:main"]},
     license="GPL-3.0",
     classifiers=[
         "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
@@ -48,5 +44,5 @@ setup(
     ],
     install_requires=install_requires,
     extras_require=extras_require,
-    zip_safe=True
+    zip_safe=True,
 )

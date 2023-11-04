@@ -1,10 +1,17 @@
-from typing import TYPE_CHECKING, Iterable
 import json
+from typing import TYPE_CHECKING, Iterable
 
 if TYPE_CHECKING:
     from pathlib import Path
 
-__all__ = ["contains", "extract_ids", "find_by", "load_backup", "merge_lists", "save_backup"]
+__all__ = [
+    "contains",
+    "extract_ids",
+    "find_by",
+    "load_backup",
+    "merge_lists",
+    "save_backup",
+]
 
 
 def save_backup(file_path: "Path", data: dict) -> None:

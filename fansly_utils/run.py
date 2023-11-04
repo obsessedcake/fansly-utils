@@ -1,14 +1,14 @@
-from configparser import ConfigParser
-from typing import TYPE_CHECKING
 import logging
 import sys
+from configparser import ConfigParser
+from typing import TYPE_CHECKING
 
 from requests.exceptions import HTTPError
 from rich.logging import RichHandler
 
 from .api import FanslyApi
 from .cli import get_cli_arg_parser
-from .cmd import *
+from .cmd import backup, generate_html, get_account_info, restore, update_accounts, wipe
 
 if TYPE_CHECKING:
     from argparse import Namespace
@@ -24,7 +24,7 @@ def _setup_logging(args: "Namespace") -> None:
         level=log_level,
         format="[%(name)s] %(message)s",
         datefmt="%X",
-        handlers=[RichHandler(rich_tracebacks=True, show_path=False)]
+        handlers=[RichHandler(rich_tracebacks=True, show_path=False)],
     )
 
 
@@ -67,6 +67,7 @@ def main() -> None:
         pass  # NOTE(obsessedcake): Should be already logged on FanslyApi side.
     except Exception:
         logger.exception("")
+
 
 if __name__ == "__main__":
     main()

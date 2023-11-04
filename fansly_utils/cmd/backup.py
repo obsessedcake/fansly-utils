@@ -1,8 +1,8 @@
 import shutil
 from typing import TYPE_CHECKING
 
-from .utils import contains, extract_ids, find_by, load_backup, merge_lists, save_backup
 from ..api import chunks, offset
+from .utils import contains, extract_ids, find_by, load_backup, merge_lists, save_backup
 
 if TYPE_CHECKING:
     from logging import Logger
@@ -52,7 +52,9 @@ def backup(api: "FanslyApi", logger: "Logger", db_file: "Path", update: bool) ->
                 accounts.append(account_info)
                 continue
 
-            logger.warning("Detected dead or unavailable in your region account with '%s' id!", account_id)
+            logger.warning(
+                "Detected dead or unavailable in your region account with '%s' id!", account_id
+            )
             deleted.append(account_id)
 
     for account in accounts:
@@ -147,7 +149,9 @@ def update_accounts(api: "FanslyApi", logger: "Logger", db_file: "Path") -> None
 
             account_info = find_by(response, key="id", value=old_id)
             if not account_info:
-                logger.warning("'%s' has deleted their account or disabled it for your region", old_name)
+                logger.warning(
+                    "'%s' has deleted their account or disabled it for your region", old_name
+                )
                 data["deleted"].append(old_id)
                 continue
 
