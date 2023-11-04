@@ -44,24 +44,32 @@ def _pretty_timedelta(delta: relativedelta) -> str:
 #
 
 
+_DATE_FORMAT = "%b %d %Y"
+
+
 def _calculate_total_spending(data: dict) -> None:
     payments = data["payments"]
 
     first_payment = _convert_ts(payments[0]["createdAt"])
+    last_payment = _convert_ts(payments[-1]["createdAt"])
     total = sum(payment["price"] for payment in payments) / 1000
+    delta = relativedelta(last_payment, first_payment)
 
-    delta = relativedelta(datetime.today(), first_payment)
-    delta = _pretty_timedelta(delta)
+    first_payment_str = first_payment.strftime(_DATE_FORMAT)
+    last_payment_str = last_payment.strftime(_DATE_FORMAT)
+    delta_str = _pretty_timedelta(delta)
+
+    def _(data) -> str:
+        return f"[bold red]{data}[/bold red]"
 
     if delta:
         print(
-            f"You have spent {total}$ in total during {delta} "
-            f"since your first payment at {first_payment:%Y %b %d}!"
+            f"You have spent {_(total)}$ in total during {_(delta_str)} in period "
+            f"from {_(first_payment_str)} to {_(last_payment_str)}!"
         )
     else:
         print(
-            f"You have spent {total}$ in total since your first payment at "
-            "{first_payment:%Y-%m-%d}!"
+            f"You have spent {_(total)}$ in period from {_(first_payment_str)} to {_(last_payment_str)}!"
         )
 
 
