@@ -13,8 +13,9 @@ install_requires=[
     "rich",
 ]
 
-extra_require = {
+extras_require = {
     "dev": [
+        "flake8",
         "flake8-black",
         "flake8-bugbear",
         "flake8-isort",
@@ -46,6 +47,6 @@ setup(
         "Topic :: Utilities",
     ],
     install_requires=install_requires,
-    extra_require=extra_require,
+    extras_require=extras_require,
     zip_safe=True
 )
