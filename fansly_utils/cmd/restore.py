@@ -1,29 +1,32 @@
 from typing import TYPE_CHECKING
 
+from sqlalchemy.sql import and_, not_, select
+
 from ..api import chunks
-from .utils import contains, extract_ids, load_backup
+from ..models import Account
+from .utils import contains, extract_ids
 
 if TYPE_CHECKING:
     from logging import Logger
-    from pathlib import Path
+
+    from sqlalchemy.orm import Session
 
     from ..api import FanslyApi
 
 __all__ = ["restore"]
 
 
-def restore(api: "FanslyApi", logger: "Logger", db_file: "Path") -> None:
-    logger.info("Loading saved data from '%s' file...", db_file)
-    data = load_backup(db_file)
-
-    logger.debug("Removing dead accounts from followings...")
-    following = list(filter(lambda aid: not contains(data["deleted"], aid), data["following"]))
-
+def restore(api: "FanslyApi", logger: "Logger", session: "Session") -> None:
     logger.info("Re-following all previously followed accounts...")
+
+    following = session.scalars(
+        select(Account.id).where(and_(Account.followed, not_(Account.deleted)))
+    ).all()
     for account_id in following:
         api.user().following().follow(account_id)
 
     logger.info("Recreating all user lists...")
+
     for list_info in data["lists"]:
         list_label = list_info["label"]
 

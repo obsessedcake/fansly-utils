@@ -18,6 +18,7 @@ from .cmd import (
     update_accounts,
     wipe,
 )
+from .models import connect
 
 if TYPE_CHECKING:
     from argparse import Namespace
@@ -56,30 +57,36 @@ def main() -> None:
     logger = logging.getLogger(__package__.replace("_", "-"))
 
     try:
-        if args.command == "backup":
-            if not args.only_update_accounts:
-                backup(api, logger, args.file, args.update)
-
-            if args.update:
-                update_accounts(api, logger, args.file)
-
-            if args.html:
-                generate_html(args.file)
-        elif args.command == "restore":
-            restore(api, logger, args.file)
-        elif args.command == "wipe":
-            wipe(api, logger, args.file, args.silent)
-        elif args.command == "html":
-            generate_html(args.file)
-        elif args.command == "info":
+        if args.command == "info":
             get_account_info(api, args.id, args.raw)
-        elif args.command == "payments":
-            if args.by_accounts:
-                process_payments(args.file, PaymentsProcessor.BY_ACCOUNTS)
-            elif args.by_years:
-                process_payments(args.file, PaymentsProcessor.BY_YEARS)
-            elif args.total:
-                process_payments(args.file, PaymentsProcessor.TOTAL)
+            return
+
+        if args.command == "wipe":
+            wipe(api, logger, args.silent)
+            return
+
+        password = config["db"].get("password")
+        with connect(args.file, password) as session:
+            if args.command == "backup":
+                if not args.only_update_accounts:
+                    backup(api, logger, session, args.update)
+
+                if args.update:
+                    update_accounts(api, logger, session)
+
+                if args.html:
+                    generate_html(args.file, session)
+            elif args.command == "restore":
+                restore(api, logger, session)
+            elif args.command == "html":
+                generate_html(args.file, session)
+            elif args.command == "payments":
+                if args.by_accounts:
+                    process_payments(session, PaymentsProcessor.BY_ACCOUNTS)
+                elif args.by_years:
+                    process_payments(session, PaymentsProcessor.BY_YEARS)
+                elif args.total:
+                    process_payments(session, PaymentsProcessor.TOTAL)
     except HTTPError:
         pass  # NOTE(obsessedcake): Should be already logged on FanslyApi side.
     except Exception:

@@ -13,16 +13,18 @@ install_requires = [
     "python-dateutil>=2.8.2",
     "requests>=2.26.0",
     "rich>=13.0.0",
+    "sqlalchemy>=2.0.0",
 ]
 
 extras_require = {
+    "cipher": ["sqlcipher3"],
     "dev": [
         "flake8",
         "flake8-black",
         "flake8-bugbear",
         "flake8-isort",
         "flake8-logging",
-    ]
+    ],
 }
 
 setup(

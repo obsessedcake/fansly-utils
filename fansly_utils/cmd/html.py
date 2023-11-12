@@ -1,13 +1,50 @@
 from typing import TYPE_CHECKING
 
 from jinja2 import Environment, PackageLoader, select_autoescape
+from sqlalchemy.orm import joinedload, load_only
+from sqlalchemy.sql import select
 
-from .utils import contains, load_backup
+from ..models import Account, List
 
 if TYPE_CHECKING:
     from pathlib import Path
 
+    from sqlalchemy.orm import Session
+
 __all__ = ["generate_html"]
+
+
+def _collect(session: "Session") -> None:
+    accounts = session.scalars(
+        select(Account)
+        .options(joinedload(Account.lists, innerjoin=True).options(load_only(List.label)))
+        .options(joinedload(Account.names, innerjoin=True))
+        .options(joinedload(Account.notes, innerjoin=True))
+    ).all()
+    labels = session.scalars(select(List.label)).all()
+
+    def _contains(account: Account, label: str) -> bool:
+        r = next(filter(lambda l: l.label == label, account.lists), None)
+        return r is not None
+
+    rows = []
+    for account in accounts:
+        row = [account.followed]
+        for label in labels:
+            row.append(_contains(account.lists, label))
+
+        rows.append(
+            {
+                "id": account.id,
+                "username": account_info["username"],
+                "deleted": account.deleted,
+                "data": row,
+                "notes": account.notes,
+                "oldNames": account_info["oldNames"],
+            }
+        )
+
+    return dict(labels=["Following", *labels], rows=rows)
 
 
 def _render(html_template: str, data: dict, output: "Path") -> None:
@@ -18,41 +55,8 @@ def _render(html_template: str, data: dict, output: "Path") -> None:
     template.stream(**data).dump(str(output))
 
 
-def _generate_html_table(db_file: "Path", data: dict) -> None:
-    data["accounts"].sort(key=lambda o: o["username"])
+def generate_html(db_file: "Path", session: "Session") -> None:
+    data = _collect(session)
+    output = db_file.with_suffix(".html")
 
-    rows = []
-    for account_info in data["accounts"]:
-        account_id = account_info["id"]
-
-        row = [contains(data["following"], account_id)]
-        for list_info in data["lists"]:
-            row.append(contains(list_info["items"], account_id))
-
-        rows.append(
-            {
-                "id": account_id,
-                "username": account_info["username"],
-                "deleted": contains(data["deleted"], account_id),
-                "data": row,
-                "notes": account_info["notes"],
-                "oldNames": account_info["oldNames"],
-            }
-        )
-
-    labels = ["Following"]
-    for list_info in data["lists"]:
-        labels.append(list_info["label"])
-
-    _render("table.html", data=dict(labels=labels, rows=rows), output=db_file.with_suffix(".html"))
-
-
-def _generate_html_charts(db_file: "Path", data: dict) -> None:
-    pass  # TODO(obsessedcake): Implement this function.
-
-
-def generate_html(db_file: "Path") -> None:
-    data = load_backup(db_file)
-
-    for func in (_generate_html_table, _generate_html_charts):
-        func(db_file, data)
+    _render("table.html", data, output)

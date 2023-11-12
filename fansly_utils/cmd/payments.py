@@ -5,38 +5,14 @@ from typing import TYPE_CHECKING
 import inflect
 from dateutil.relativedelta import relativedelta
 from rich import print
+from sqlalchemy.sql import extract, func, select
 
-from .utils import find_by, load_backup
+from ..models import Account, AccountName, Payment
 
 if TYPE_CHECKING:
-    from pathlib import Path
+    from sqlalchemy.orm import Session
 
 __all__ = ["process_payments", "PaymentsProcessor"]
-
-#
-# Utils
-#
-
-
-def _convert_ts(timestamp: int) -> datetime:
-    return datetime.utcfromtimestamp(timestamp / 1000)
-
-
-_LANG = inflect.engine()
-
-
-# https://gist.github.com/thatalextaylor/7408395
-def _pretty_timedelta(delta: relativedelta) -> str:
-    years = delta.years
-    months = delta.months
-
-    if not years and not months:
-        return None
-
-    measures = ((years, "year"), (months, "month"))
-    return _LANG.join(
-        [f"{count} {_LANG.plural(noun, count)}" for (count, noun) in measures if count]
-    )
 
 
 #
@@ -44,69 +20,66 @@ def _pretty_timedelta(delta: relativedelta) -> str:
 #
 
 
-_DATE_FORMAT = "%b %d %Y"
+def _calculate_total_spending(session: "Session") -> None:
+    first_payment: datetime = session.scalar(select(func.min(Payment.created_at)))
+    last_payment: datetime = session.scalar(select(func.max(Payment.created_at)))
+    total: float = session.scalar(select(func.sum(Payment.price)))
 
+    # https://gist.github.com/thatalextaylor/7408395
+    def _pretty_timedelta(delta: relativedelta) -> str:
+        lang = inflect.engine()
 
-def _calculate_total_spending(data: dict) -> None:
-    payments = data["payments"]
+        years = delta.years
+        months = delta.months
 
-    first_payment = _convert_ts(payments[0]["createdAt"])
-    last_payment = _convert_ts(payments[-1]["createdAt"])
-    total = sum(payment["price"] for payment in payments) / 1000
+        if not years and not months:
+            return None
+
+        measures = ((years, "year"), (months, "month"))
+        return lang.join(
+            [f"{count} {lang.plural(noun, count)}" for (count, noun) in measures if count]
+        )
+
     delta = relativedelta(last_payment, first_payment)
+    delta = _pretty_timedelta(delta)
 
-    first_payment_str = first_payment.strftime(_DATE_FORMAT)
-    last_payment_str = last_payment.strftime(_DATE_FORMAT)
-    delta_str = _pretty_timedelta(delta)
+    date_format = "%b %d %Y"
+    first_payment = first_payment.strftime(date_format)
+    last_payment = last_payment.strftime(date_format)
 
     def _(data) -> str:
         return f"[bold red]{data}[/bold red]"
 
     if delta:
         print(
-            f"You have spent {_(total)}$ in total during {_(delta_str)} in period "
-            f"from {_(first_payment_str)} to {_(last_payment_str)}!"
+            f"You have spent {_(total)}$ in total during {_(delta)} in period "
+            f"from {_(first_payment)} to {_(last_payment)}!"
         )
     else:
-        print(
-            f"You have spent {_(total)}$ in period from {_(first_payment_str)} to {_(last_payment_str)}!"
-        )
+        print(f"You have spent {_(total)}$ in period from {_(first_payment)} to {_(last_payment)}!")
 
 
-def _distribute_by_accounts(data: dict) -> None:
-    result: list[dict] = []
-    for payment in data["payments"]:
-        entry = find_by(result, key="accountId", value=payment["accountId"])
-        if entry:
-            entry["price"] += payment["price"]
-        else:
-            result.append({"accountId": payment["accountId"], "price": payment["price"]})
+def _distribute_by_accounts(session: "Session") -> None:
+    total = func.sum(Payment.price).label("total")
+    result = session.scalars(
+        select(AccountName.value, total)
+        .join_from(Account, AccountName)
+        .join(Payment)
+        .where(func.max(AccountName.created_at))
+        .order_by(total.desc())
+    ).all()
 
-    result.sort(key=lambda e: e["price"])
-
-    for entry in result:
-        account_info = find_by(data["accounts"], key="id", value=entry["accountId"])
-        if account_info:
-            entry["accountId"] = account_info["username"]
-
-    for entry in result:
-        print(f'{entry["accountId"]}: {entry["price"] / 1000}$')
+    for account_name, total_price in result:
+        print(f"{account_name}: {total_price}$")
 
 
-def _distribute_by_years(data: dict) -> None:
-    result: list[dict] = []
-    for payment in data["payments"]:
-        year = _convert_ts(payment["createdAt"]).year
-        entry = find_by(result, key="year", value=year)
-        if entry:
-            entry["price"] += payment["price"]
-        else:
-            result.append({"year": year, "price": payment["price"]})
+def _distribute_by_years(session: "Session") -> None:
+    year = extract("YEAR", Payment.created_at).label("year")
+    total = func.sum(Payment.price).label("total")
+    result = session.scalars(select(year, total).order_by(year.desc())).all()
 
-    result.sort(key=lambda e: e["year"])
-
-    for entry in result:
-        print(f'{entry["year"]}: {entry["price"] / 1000}$')
+    for year, total_price in result:
+        print(f"{year}: {total_price}$")
 
 
 #
@@ -127,10 +100,9 @@ _PROCESSORS = {
 }
 
 
-def process_payments(db_file: "Path", processor: PaymentsProcessor) -> None:
-    data = load_backup(db_file)
-    if not data["payments"]:
+def process_payments(session: "Session", processor: PaymentsProcessor) -> None:
+    if not session.scalars(select(Payment)).one_or_none():
         print("No payments found!")
         return
 
-    _PROCESSORS[processor](data)
+    _PROCESSORS[processor](session)
