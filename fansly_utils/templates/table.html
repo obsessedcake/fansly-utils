@@ -101,16 +101,17 @@
       </thead>
       <tbody>
         {% for row in rows %}
+          {% set row_id = 'id-' ~ row['id'] %}
           <tr>
             <th class="fu-row">
               {% if row['deleted'] %}
-                  <s>{{ row['username'] }}</s>
+                <s>{{ row['username'] }}</s>
               {% else %}
-                  <a href="https://fansly.com/{{ row['username'] }}">{{ row['username'] }}</a>
+                <a href="https://fansly.com/{{ row['username'] }}">{{ row['username'] }}</a>
               {% endif %}
 
               {% if row['oldNames'] | length > 0 %}
-                {% set tip_content_id = 'id-' ~ row['id'] ~ '-names' %}
+                {% set tip_content_id = row_id ~ '-names' %}
                 <sup class="tip" data-tip="{{ tip_content_id }}">old names</sup>
                 <div class="tip-content d-none" id="{{ tip_content_id }}">
                   <ul style="list-style: none;">
@@ -122,7 +123,7 @@
               {% endif %}
 
               {% if row['notes'] | length > 0 %}
-                {% set tip_content_id = 'id-' ~ row['id'] ~ '-notes' %}
+                {% set tip_content_id = row_id ~ '-notes' %}
                 <sub class="tip" data-tip="{{ tip_content_id }}">notes</sub>
                 <div class="tip-content d-none" id="{{ tip_content_id }}">
                   {% if row['notes'] | length == 1 %}
@@ -130,14 +131,14 @@
                     <b>{{ note['title'] }}</b>
                     <br/>
                     {% autoescape false %}
-                        {{ note['data'] | urlize | replace('\n', '<br/>') }}
+                      {{ note['data'] | urlize | replace('\n', '<br/>') }}
                     {% endautoescape %}
                   {% else %}
-                    {% set notes_accordion_id = 'id-' ~ row['id'] ~ '-notes-accordion' %}
+                    {% set notes_accordion_id = row_id ~ '-notes-accordion' %}
                     <div id="{{ notes_accordion_id }}">
                       {% for note in row['notes'] %}
-                        {% set note_header_id = 'id-' ~ row['id'] ~ '-note-' ~ loop.index ~ '-header' %}
-                        {% set note_body_id = 'id-' ~ row['id'] ~ '-note-' ~ loop.index ~ '-body' %}
+                        {% set note_header_id = row_id ~ '-note-' ~ loop.index ~ '-header' %}
+                        {% set note_body_id = row_id ~ '-note-' ~ loop.index ~ '-body' %}
                         <div class="card">
                           <div class="card-header" id="{{ note_header_id }}">
                               <button class="btn btn-link" data-toggle="collapse" data-target="#{{ note_body_id }}" aria-expanded="true" aria-controls="{{ note_body_id }}">
