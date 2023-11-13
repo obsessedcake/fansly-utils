@@ -156,7 +156,7 @@ The following actions will be performed:
 
 ### Lists
 
-You can generate a beautiful HTML table will all accounts and lists to which they are assigned:
+You can generate a beautiful HTML table, which is based on [datatables.js](https://datatables.net) and [bootstrap 4](https://getbootstrap.com/docs/4.6/getting-started/introduction/), with all accounts and lists to which they are assigned:
 
 ```bash
 fansly-utils backup --html
@@ -165,6 +165,15 @@ fansly-utils html
 ```
 
 ![lists table](.imgs/lists-table.png)
+
+Current implementation is quite handy and provides a lot of useful features:
+
+- searching by account names,
+- sorting columns,
+- hiding columns,
+- reording columns,
+- exporting to CSV and Excel formats,
+- pagination.
 
 ### Payments
 
