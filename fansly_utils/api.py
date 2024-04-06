@@ -1,5 +1,7 @@
 import json
 import logging
+import random
+import time
 from itertools import islice
 from typing import TYPE_CHECKING, Any, Callable, Iterable, Iterator
 
@@ -14,8 +16,8 @@ if TYPE_CHECKING:
 __all__ = ["FanslyApi", "chunks", "offset"]
 
 
-DEFAULT_CHUNK_SIZE: int = 25
-DEFAULT_LIMIT_VALUE: int = 100
+DEFAULT_CHUNK_SIZE: int = 5
+DEFAULT_LIMIT_VALUE: int = 15
 
 
 # https://stackoverflow.com/questions/42601812
@@ -83,8 +85,12 @@ class _Session(Session):
                 self._log_response(response)
         except HTTPError:
             self._log_response(response, is_error=True)
-            self._logger.error("Request has failed with error:", response.json())
+            self._logger.error(
+                "Request has failed with %s status: %s", response.status_code, response.text
+            )
             raise
+        else:
+            time.sleep(random.uniform(0.4, 0.75))  # to avoid rate limiter
 
         return response.json()["response"]
 

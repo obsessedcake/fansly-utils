@@ -1,5 +1,9 @@
+import random
 import shutil
+import time
 from typing import TYPE_CHECKING
+
+from requests.exceptions import HTTPError
 
 from ..api import chunks, offset
 from .utils import contains, extract_ids, find_by, load_backup, merge_lists, save_backup
@@ -44,18 +48,36 @@ def backup(api: "FanslyApi", logger: "Logger", db_file: "Path", update: bool) ->
     logger.info("Found %s accounts that the user follows!", len(following))
     logger.info("Backup all available accounts info...")
 
-    for chunk in chunks(accounts_ids):
-        response = api.accounts().get_batch(accounts_ids=chunk)
-        for account_id in chunk:
-            account_info = find_by(response, key="id", value=account_id)
-            if account_info:
-                accounts.append(account_info)
-                continue
+    time.sleep(random.uniform(5, 15))  # to avoid rate limiter
 
-            logger.warning(
-                "Detected dead or unavailable in your region account with '%s' id!", account_id
-            )
-            deleted.append(account_id)
+    for chunk in chunks(accounts_ids):
+        while True:
+            try:
+                response = api.accounts().get_batch(accounts_ids=chunk)
+                for account_id in chunk:
+                    account_info = find_by(response, key="id", value=account_id)
+                    if account_info:
+                        accounts.append(account_info)
+                        continue
+
+                    logger.warning(
+                        "Detected dead or unavailable in your region account with '%s' id!",
+                        account_id,
+                    )
+                    deleted.append(account_id)
+            except HTTPError as e:
+                if e.response.status_code != 429:
+                    raise
+
+                secs = random.uniform(60, 60 * 4)  # to avoid rate limiter
+                logger.warning(
+                    "Faced rate-limiter! Sleeping for the next %s minutes and %s seconds.",
+                    divmod(secs, 60),
+                )
+                time.sleep(secs)
+            else:
+                time.sleep(random.uniform(15, 60))  # to avoid rate limiter
+                break
 
     for account in accounts:
         account["oldNames"] = []  # to simplify logic, let's inject this now.
