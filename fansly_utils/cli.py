@@ -116,6 +116,19 @@ def get_cli_arg_parser() -> ArgumentParser:
 
     _add_parser(subparsers, "restore", "Restore saved followings, notes and user lists.")
 
+    # import
+
+    add_li = _add_parser(
+        subparsers, "add-li", "Add creators to specified user list.", FileType.NONE
+    )
+    add_li.add_argument(
+        "files",
+        nargs="*",
+        type=_is_valid_path,
+        help="Files with a list of creators ids or usernames. Filename is used as a list label.",
+        default=None,
+    )
+
     # wipe
 
     wipe = _add_parser(

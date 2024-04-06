@@ -1,3 +1,4 @@
+from .add_list_items import add_list_items  # noqa: F401
 from .backup import backup, update_accounts  # noqa: F401
 from .html import generate_html  # noqa: F401
 from .info import get_account_info  # noqa: F401

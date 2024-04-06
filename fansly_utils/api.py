@@ -16,8 +16,8 @@ if TYPE_CHECKING:
 __all__ = ["FanslyApi", "chunks", "offset"]
 
 
-DEFAULT_CHUNK_SIZE: int = 5
-DEFAULT_LIMIT_VALUE: int = 15
+DEFAULT_CHUNK_SIZE: int = 25
+DEFAULT_LIMIT_VALUE: int = 100
 
 
 # https://stackoverflow.com/questions/42601812
@@ -90,7 +90,7 @@ class _Session(Session):
             )
             raise
         else:
-            time.sleep(random.uniform(0.4, 0.75))  # to avoid rate limiter
+            time.sleep(random.uniform(1, 3))  # to avoid rate limiter
 
         return response.json()["response"]
 
@@ -152,12 +152,11 @@ class _FanslyAccountApi:
         response = self.get_batch(**params, brief=brief)
         return response[0] if response else None
 
-    def get_batch(
+    def _get_batch(
         self,
-        *,
-        accounts_ids: Iterable[str] | None = None,
-        usernames: Iterable[str] | None = None,
-        brief: bool = True,
+        accounts_ids: Iterable[str] | None,
+        usernames: Iterable[str] | None,
+        brief: bool,
     ) -> list[dict]:
         """
         Get accounts information in a batch
@@ -201,6 +200,27 @@ class _FanslyAccountApi:
                 }
             )
         return result
+
+    def get_batch(
+        self,
+        *,
+        accounts_ids: Iterable[str] | None = None,
+        usernames: Iterable[str] | None = None,
+        brief: bool = True,
+    ) -> list[dict]:
+        while True:
+            try:
+                return self._get_batch(accounts_ids, usernames, brief)
+            except HTTPError as e:
+                if e.response.status_code != 429:
+                    raise
+
+                secs = random.uniform(60, 60 * 4)  # to avoid rate limiter
+                self._session.logger.warning(
+                    "Faced rate-limiter! Sleeping for the next %s minutes and %s seconds.",
+                    divmod(secs, 60),
+                )
+                time.sleep(secs)
 
 
 #

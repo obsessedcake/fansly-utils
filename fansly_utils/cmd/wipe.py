@@ -77,10 +77,6 @@ def wipe(api: "FanslyApi", logger: "Logger", no_warning: bool) -> None:
     logger.warning("Removing likes from all posts is not implemented! Skipping this action!")
     # TODO(obsessedcake): Implement this.
 
-    logger.info("Removing likes from all posts...")
-    logger.warning("Removing likes from all posts is not implemented! Skipping this action!")
-    # TODO(obsessedcake): Implement this.
-
     logger.info("Removing all collections...")
     logger.warning("Removing all collections is not implemented! Skipping this action!")
     # TODO(obsessedcake): Implement this.

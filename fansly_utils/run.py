@@ -10,6 +10,7 @@ from .api import FanslyApi
 from .cli import get_cli_arg_parser
 from .cmd import (
     PaymentsProcessor,
+    add_list_items,
     backup,
     generate_html,
     get_account_info,
@@ -33,7 +34,7 @@ def _setup_logging(args: "Namespace") -> None:
         level=log_level,
         format="[%(name)s] %(message)s",
         datefmt="%X",
-        handlers=[RichHandler(rich_tracebacks=True, show_path=False)],
+        handlers=[RichHandler(rich_tracebacks=True, show_path=False, tracebacks_show_locals=True)],
     )
 
 
@@ -56,7 +57,9 @@ def main() -> None:
     logger = logging.getLogger(__package__.replace("_", "-"))
 
     try:
-        if args.command == "backup":
+        if args.command == "add-li":
+            add_list_items(api, logger, args.files)
+        elif args.command == "backup":
             if not args.only_update_accounts:
                 backup(api, logger, args.file, args.update)
 
