@@ -16,8 +16,8 @@ if TYPE_CHECKING:
 __all__ = ["FanslyApi", "chunks", "offset"]
 
 
-DEFAULT_CHUNK_SIZE: int = 25
-DEFAULT_LIMIT_VALUE: int = 100
+DEFAULT_CHUNK_SIZE: int = 10
+DEFAULT_LIMIT_VALUE: int = 10
 
 
 # https://stackoverflow.com/questions/42601812
@@ -218,7 +218,7 @@ class _FanslyAccountApi:
                 secs = random.uniform(60, 60 * 4)  # to avoid rate limiter
                 self._session.logger.warning(
                     "Faced rate-limiter! Sleeping for the next %s minutes and %s seconds.",
-                    divmod(secs, 60),
+                    *divmod(round(secs), 60),
                 )
                 time.sleep(secs)
 
