@@ -71,7 +71,7 @@ def main() -> None:
         elif args.command == "restore":
             restore(api, logger, args.file)
         elif args.command == "wipe":
-            wipe(api, logger, args.file, args.silent)
+            wipe(api, logger, args.backup, args.silent)
         elif args.command == "html":
             generate_html(args.file)
         elif args.command == "info":

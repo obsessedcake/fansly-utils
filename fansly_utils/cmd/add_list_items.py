@@ -113,12 +113,12 @@ def _add_list_items(api: "FanslyApi", logger: "Logger", file: "Path", creators: 
     list_id: str = ""
 
     label = file.stem.lower()
-    for list_info in api.user().lists().get_all(only_ids=False):
+    for list_info in api.lists().get_all(only_ids=False):
         if list_info["label"].lower() == label:
             logger.info("Found %r in user lists!", label)
 
             list_id = list_info["id"]
-            list_items = set(api.user().lists().get_list_items(list_info["id"]))
+            list_items = set(api.lists().items().get_all(list_info["id"]))
 
             _log_ids(logger, creators, found_ids & list_items, "is already added")
 
@@ -126,11 +126,11 @@ def _add_list_items(api: "FanslyApi", logger: "Logger", file: "Path", creators: 
             break
     else:
         logger.warning("Couldn't find %r in user lists! Creating one", label)
-        list_id = api.user().lists().add_list(label)
+        list_id = api.lists().create(label)
 
     # get or create user list
 
-    api.user().lists().add_list_items(list_id=list_id, accounts_ids=found_ids)
+    api.lists().items().add(list_id=list_id, accounts_ids=found_ids)
     _log_ids(logger, creators, found_ids, "has been successfully added")
 
     time.sleep(random.uniform(15, 60))  # to avoid rate limiter

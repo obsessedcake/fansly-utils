@@ -3,8 +3,6 @@ import shutil
 import time
 from typing import TYPE_CHECKING
 
-from requests.exceptions import HTTPError
-
 from ..api import chunks, offset
 from .utils import contains, extract_ids, find_by, load_backup, merge_lists, save_backup
 
@@ -29,10 +27,10 @@ def backup(api: "FanslyApi", logger: "Logger", db_file: "Path", update: bool) ->
 
     logger.info("Backup all user lists...")
 
-    for list_info in api.user().lists().get_all(only_ids=False):
+    for list_info in api.lists().get_all(only_ids=False):
         logger.info("Backup '%s' user list", list_info["label"])
 
-        items = api.user().lists().get_list_items(list_info["id"])
+        items = api.lists().items().get_all(list_info["id"])
         accounts_ids |= set(items)
 
         list_info["items"] = items
@@ -41,7 +39,7 @@ def backup(api: "FanslyApi", logger: "Logger", db_file: "Path", update: bool) ->
     logger.info("Processed %s lists!", len(lists))
     logger.info("Backup a list of accounts that the user follows...")
 
-    for ids in offset(lambda kwarg: api.user().following().get_all(**kwarg)):
+    for ids in offset(lambda kwarg: api.user().following().get_batch(**kwarg)):
         following.extend(ids)
         accounts_ids |= set(ids)
 
@@ -51,7 +49,7 @@ def backup(api: "FanslyApi", logger: "Logger", db_file: "Path", update: bool) ->
     time.sleep(random.uniform(5, 15))  # to avoid rate limiter
 
     for chunk in chunks(accounts_ids):
-        response = api.accounts().get_batch(accounts_ids=chunk)
+        response = api.accounts().get_batch(accounts_ids=chunk, brief=True)
         for account_id in chunk:
             account_info = find_by(response, key="id", value=account_id)
             if account_info:
@@ -68,7 +66,7 @@ def backup(api: "FanslyApi", logger: "Logger", db_file: "Path", update: bool) ->
         account["oldNames"] = []  # to simplify logic, let's inject this now.
 
     logger.info("Backup all available payments...")
-    for payments_chunk in offset(lambda kwarg: api.user().payments().get_all(**kwarg)):
+    for payments_chunk in offset(lambda kwarg: api.user().payments().get_batch(**kwarg)):
         payments.extend(payments_chunk)
         accounts_ids |= set(extract_ids(payments_chunk, key="accountId"))
 
@@ -149,7 +147,7 @@ def update_accounts(api: "FanslyApi", logger: "Logger", db_file: "Path") -> None
     accounts = list(filter(lambda a: not contains(data["deleted"], a["id"]), data["accounts"]))
 
     for chunk in chunks(accounts):
-        response = api.accounts().get_batch(accounts_ids=extract_ids(chunk))
+        response = api.accounts().get_batch(accounts_ids=extract_ids(chunk), brief=True)
         for old_account_info in chunk:
             old_id = old_account_info["id"]
             old_name = old_account_info["username"]

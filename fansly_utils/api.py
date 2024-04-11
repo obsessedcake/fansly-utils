@@ -17,7 +17,7 @@ __all__ = ["FanslyApi", "chunks", "offset"]
 
 
 DEFAULT_CHUNK_SIZE: int = 10
-DEFAULT_LIMIT_VALUE: int = 10
+DEFAULT_LIMIT_VALUE: int = 25
 
 
 # https://stackoverflow.com/questions/42601812
@@ -41,6 +41,21 @@ class _Session(Session):
     def logger(self) -> "Logger":
         return self._logger
 
+    def invoke_rate_limited(self, callback: Callable) -> Any:
+        while True:
+            try:
+                return callback()
+            except HTTPError as e:
+                if e.response.status_code != 429:
+                    raise
+
+                secs = random.uniform(60, 60 * 4)  # to avoid rate limiter
+                self.logger.warning(
+                    "Faced rate-limiter! Sleeping for the next %s minutes and %s seconds.",
+                    *divmod(round(secs), 60),
+                )
+                time.sleep(secs)
+
     def request(self, method, url, *args, **kwargs):
         # Some Angular stuff (https://angular.io/guide/service-worker-devops)
         if params := kwargs.get("params"):
@@ -51,7 +66,7 @@ class _Session(Session):
         # The server side expects a comma separated list.
         for k, v in kwargs["params"].items():
             if isinstance(v, (list, tuple, set)):
-                kwargs["params"][k] = ",".join(v)
+                kwargs["params"][k] = ",".join(map(str, v))
 
         # Cache a full version of the url.
         joined_url = self._urls_cache.get(url)
@@ -90,7 +105,7 @@ class _Session(Session):
             )
             raise
         else:
-            time.sleep(random.uniform(1, 3))  # to avoid rate limiter
+            time.sleep(random.uniform(0.75, 1.25))  # to avoid rate limiter
 
         return response.json()["response"]
 
@@ -117,11 +132,32 @@ class FanslyApi:
     def __init__(self, *, authorization_token: str, user_agent: str) -> None:
         self._session = _Session(authorization_token, user_agent)
 
-    def accounts(self) -> "_FanslyAccountApi":
-        return _FanslyAccountApi(self._session)
+    def accounts(self) -> "_FanslyAccountsApi":
+        return _FanslyAccountsApi(self._session)
+
+    def chats(self) -> "_FanslyChatsApi":
+        return _FanslyChatsApi(self._session)
+
+    def collections(self) -> "_FanslyCollectionsApi":
+        return _FanslyCollectionsApi(self._session)
+
+    def media(self) -> "_FanslyMediaApi":
+        return _FanslyMediaApi(self._session)
+
+    def lists(self) -> "_FanslyListsApi":
+        return _FanslyListsApi(self, self._session)
+
+    def notes(self) -> "_FanslyNotesApi":
+        return _FanslyNotesApi(self, self._session)
+
+    def posts(self) -> "_FanslyPostsApi":
+        return _FanslyPostsApi(self._session)
 
     def user(self) -> "_FanslyUserApi":
         return _FanslyUserApi(self, self._session)
+
+    def sessions(self) -> "_FanslySessionsApi":
+        return _FanslySessionsApi(self._session)
 
 
 #
@@ -129,7 +165,7 @@ class FanslyApi:
 #
 
 
-class _FanslyAccountApi:
+class _FanslyAccountsApi:
     def __init__(self, session: _Session):
         self._session = session
 
@@ -206,21 +242,359 @@ class _FanslyAccountApi:
         *,
         accounts_ids: Iterable[str] | None = None,
         usernames: Iterable[str] | None = None,
-        brief: bool = True,
+        brief: bool = False,
     ) -> list[dict]:
-        while True:
-            try:
-                return self._get_batch(accounts_ids, usernames, brief)
-            except HTTPError as e:
-                if e.response.status_code != 429:
-                    raise
+        return self._session.invoke_rate_limited(
+            lambda: self._get_batch(accounts_ids, usernames, brief)
+        )
 
-                secs = random.uniform(60, 60 * 4)  # to avoid rate limiter
-                self._session.logger.warning(
-                    "Faced rate-limiter! Sleeping for the next %s minutes and %s seconds.",
-                    *divmod(round(secs), 60),
-                )
-                time.sleep(secs)
+
+#
+# Fansly - Messages API
+#
+
+
+class _FanslyChatsApi:
+    def __init__(self, session: _Session):
+        self._session = session
+
+    def messages(self) -> "_FanslyChatMessagesApi":
+        return _FanslyChatMessagesApi(self._session)
+
+    def get_batch(self, *, limit: int = DEFAULT_LIMIT_VALUE, offset: int = 0) -> list[dict]:
+        params = {
+            "flags": 0,
+            "limit": limit,
+            "offset": offset,
+            "search": "",
+            "sortOrder": 1,  # newest
+            "subscriptionTierId": "",  # all
+        }
+
+        response = self._session.get_json("/messaging/groups", params=params)
+
+        result: list[dict] = []
+        for group_info in response.get("data", []):
+            result.append(
+                {
+                    "id": group_info["groupId"],
+                    "partnerAccountId": group_info["partnerAccountId"],
+                    "partnerUsername": group_info["partnerUsername"],
+                }
+            )
+        return result
+
+
+class _FanslyChatMessagesApi:
+    def __init__(self, session: _Session):
+        self._session = session
+
+    def get_batch(
+        self,
+        *,
+        chat_id: str,
+        oldest_msg_id: str = "0",
+        limit: int = DEFAULT_LIMIT_VALUE,
+        brief: bool = False,
+    ) -> list[str]:
+        params = {
+            "before": oldest_msg_id,
+            "groupId": chat_id,
+            "limit": limit,
+        }
+
+        try:
+            response = self._session.get_json("/message", params=params)
+        except HTTPError as e:
+            if e.response.status_code == 500:  # dead account
+                return []
+
+            raise
+
+        messages = response["messages"]
+
+        if not brief:
+            messages
+
+        result = []
+        for message in messages:
+            result.append({"id": message["id"], "senderId": message["senderId"]})
+
+        return result
+
+    def delete(self, *, message_id: str) -> None:
+        self._session.post("/message/delete", json={"messageId": message_id})
+
+
+#
+# Fansly - Collections API
+#
+
+
+class _FanslyCollectionsApi:
+    def __init__(self, session: _Session):
+        self._session = session
+
+    def items(self) -> "_FanslyCollectionItemsApi":
+        return _FanslyCollectionItemsApi(self._session)
+
+    def get_all(self, *, brief: bool = False) -> list[dict[str, Any]]:
+        response = self._session.get_json("/uservault/albumsnew")
+
+        if not brief:
+            return response
+
+        result: list[dict[str, Any]] = []
+        for obj in response["albums"]:
+            result.append({"id": obj["id"], "title": obj["title"], "type": obj["type"]})
+
+        return result
+
+    def create(self, *, title: str, description: str = "") -> str:
+        data = {
+            "accountId": None,
+            "description": description,
+            "id": None,
+            "public": 0,
+            "thumbnailId": None,
+            "title": title,
+            "type": 0,
+        }
+        self._session.post_json("/uservault/albums", json=data)["id"]
+
+    def delete(self, *, collection_id: str) -> None:
+        self._session.post("/uservault/album/delete", json={"albumId": collection_id})
+
+
+class _FanslyCollectionItemsApi:
+    def __init__(self, session: _Session):
+        self._session = session
+
+    def get_batch(
+        self, *, collection_id: str, oldest_id: str = "0", limit: int = DEFAULT_LIMIT_VALUE
+    ) -> list[dict[str, Any]]:
+        params = {
+            "albumId": collection_id,
+            "before": oldest_id,
+            "after": 0,
+            "limit": limit,
+        }
+        response = self._session.get_json("/uservault/album/content", params=params)
+
+        result: dict[str, dict[str, Any]] = {}
+        for obj in response["albumContent"]:
+            result[obj["mediaId"]] = {"id": obj["id"]}
+
+        for obj in response["aggregationData"]["accountMedia"]:
+            result[obj["mediaId"]]["accountId"] = obj["accountId"]
+
+        return list(result.values())
+
+    def delete(self, *, collection_id: str, items_ids: list[str] | str) -> None:
+        data = {
+            "albumId": collection_id,
+            "albumContentIds": [items_ids] if isinstance(items_ids, str) else items_ids,
+        }
+        self._session.post("/uservault/album/content/delete", json=data)
+
+
+#
+# Fansly - Lists API
+#
+
+
+class _FanslyListsApi:
+    def __init__(self, root_api: FanslyApi, session: _Session) -> None:
+        self._root_api = root_api
+        self._session = session
+
+    def items(self) -> "_FanslyListItemsApi":
+        return _FanslyListItemsApi(self._session)
+
+    def get_all(self, *, only_ids: bool = True) -> list[dict] | list[str]:
+        """
+        Get all user lists
+
+        **UI path:** Account -> Lists.
+        """
+
+        response = self._session.get_json("/lists/account", params={"itemId": ""})
+
+        if only_ids:
+            return [obj["id"] for obj in response]
+
+        result: list[dict] = []
+        for list_info in response:
+            result.append(
+                {
+                    "id": list_info["id"],
+                    "label": list_info["label"],
+                }
+            )
+        return result
+
+    def create(self, label: str, description: str = "") -> str:
+        data = {"label": label, "description": description}
+        self._session.post_json("/lists", json=data)["id"]
+
+    def delete(self, list_id: str | None) -> None:
+        self._session.post("/lists/remove", json={"listId": list_id})
+
+
+class _FanslyListItemsApi:
+    def __init__(self, session: _Session) -> None:
+        self._session = session
+
+    def get_all(self, list_id: str) -> list[str]:
+        """
+        Get all items of a specific list
+
+        **UI path:** Account -> Lists -> <List Name>.
+        """
+        response = self._session.get_json("/lists/items", params={"listId": list_id})
+        return [obj["id"] for obj in response]
+
+    def add(self, list_id: str, *, accounts_ids: list[str] | str) -> None:
+        if not accounts_ids:
+            return
+
+        commands: list[dict] = []
+        for account_id in [accounts_ids] if isinstance(accounts_ids, str) else accounts_ids:
+            commands.append(
+                {
+                    "listItem": {
+                        "id": account_id,
+                        "listId": list_id,
+                    },
+                    "type": 1,
+                }
+            )
+
+        self._session.post_json("/lists/commands", json={"listCommands": commands})
+
+    def delete(self, list_id: str, *, accounts_ids: list[str] | str) -> None:
+        """
+        Get all items of a specific list
+
+        **UI path:** Account -> Lists -> <List Name> -> <Item Name> -> Remove Button.
+        """
+        if not accounts_ids:
+            return
+
+        data = {
+            "listId": list_id,
+            "listItemIds": [accounts_ids] if isinstance(accounts_ids, str) else accounts_ids,
+        }
+        self._session.post("/lists/items/remove", json=data)
+
+
+#
+# Fansly - Media API
+#
+
+
+class _FanslyMediaApi:
+    def __init__(self, session: _Session) -> None:
+        self._session = session
+
+    def purchases(self) -> "_FanslyUserMediaPurchasesApi":
+        return _FanslyUserMediaPurchasesApi(self._session)
+
+
+class _FanslyUserMediaPurchasesApi:
+    def __init__(self, session: _Session) -> None:
+        self._session = session
+
+    def get_all_accounts(self) -> list[str]:
+        # response = self._session.get("/uservault/albumsnew", params={"accountId": ""})
+        # aggregation_data = response["aggregationData"]["accountMedia"]
+
+        return []  # TODO(obsessedcake): Implement this.
+
+
+#
+# Fansly - Notes API
+#
+
+
+class _FanslyNotesApi:
+    def __init__(self, root_api: FanslyApi, session: _Session) -> None:
+        self._root_api = root_api
+        self._session = session
+
+    def add(self, *, account_id: str, title: str, data: str) -> str:
+        data = {
+            "contentId": account_id,
+            "contentType": 12000,
+            "title": title,
+            "data": data,
+        }
+        self._session.post_json("/notes", json=data)["id"]
+
+    def delete(self, *, account_id: str, note_id: str) -> None:
+        data = {
+            # "accountId": user_account_id,
+            "contentId": account_id,
+            "contentType": 12000,
+            # "title": "test",
+            # "note": "test",
+            "id": note_id,
+        }
+        self._session.post("/notes/delete", json=data)
+
+
+#
+# Fansly - Posts API
+#
+
+
+class _FanslyPostsApi:
+    def __init__(self, session: _Session):
+        self._session = session
+
+    def get(self, *, post_id: str) -> dict[str, Any] | None:
+        response = self._session.get_json("/post", params={"ids": post_id})
+
+        posts = response["posts"]
+        if not posts:
+            return None
+
+        return posts[0]
+
+    def delete(self, *, post_id: str) -> None:
+        self._session.post(f"/post/{post_id}/delete")
+
+
+#
+# Fansly - Sessions API
+#
+
+
+class _FanslySessionsApi:
+    def __init__(self, session: _Session):
+        self._session = session
+
+    def get_batch(
+        self,
+        *,
+        oldest_session_id: str = "0",
+        limit: int = DEFAULT_LIMIT_VALUE,
+        only_ids: bool = True,
+    ) -> list[str]:
+        params = {
+            "before": oldest_session_id,
+            "limit": limit,
+            "status": "0, 2",
+        }
+        response = self._session.get_json("/sessions", params=params)
+
+        if only_ids:
+            return [obj["id"] for obj in response]
+
+        return response
+
+    def close(self, *, session_id: str) -> None:
+        self._session.post_json("/session/close", json={"id": session_id})
 
 
 #
@@ -245,15 +619,6 @@ class _FanslyUserApi:
     def following(self) -> "_FanslyUserFollowingApi":
         return _FanslyUserFollowingApi(self._root_api, self._session)
 
-    def lists(self) -> "_FanslyUserListsApi":
-        return _FanslyUserListsApi(self._root_api, self._session)
-
-    def media(self) -> "_FanslyUserMediaApi":
-        return _FanslyUserMediaApi(self._session)
-
-    def notes(self) -> "_FanslyUserNotesApi":
-        return _FanslyUserNotesApi(self._root_api, self._session)
-
     def payments(self) -> "_FanslyUserPaymentsApi":
         return _FanslyUserPaymentsApi(self._session)
 
@@ -266,7 +631,7 @@ class _FanslyUserFollowersApi:
         self._root_api = root_api
         self._session = session
 
-    def get_all(self, *, limit: int = DEFAULT_LIMIT_VALUE, offset: int = 0) -> list[str]:
+    def get_batch(self, *, limit: int = DEFAULT_LIMIT_VALUE, offset: int = 0) -> list[str]:
         user_id = self._root_api.user().id()
         params = {
             "before": 0,
@@ -284,7 +649,7 @@ class _FanslyUserFollowingApi:
         self._root_api = root_api
         self._session = session
 
-    def get_all(self, *, limit: int = DEFAULT_LIMIT_VALUE, offset: int = 0) -> list[str]:
+    def get_batch(self, *, limit: int = DEFAULT_LIMIT_VALUE, offset: int = 0) -> list[str]:
         user_id = self._root_api.user().id()
         params = {
             "before": 0,
@@ -296,172 +661,18 @@ class _FanslyUserFollowingApi:
         return [obj["accountId"] for obj in response]
 
     def follow(self, account_id: str):
-        self._session.post_json(f"/account/{account_id}/followers")
+        self._session.post(f"/account/{account_id}/followers")
 
     def unfollow(self, account_id: str):
-        self._session.post_json(f"/account/{account_id}/followers/remove")
-
-
-class _FanslyUserListsApi:
-    def __init__(self, root_api: FanslyApi, session: _Session) -> None:
-        self._root_api = root_api
-        self._session = session
-
-    def get_all(self, *, only_ids: bool = True) -> list[dict] | list[str]:
-        """
-        Get all user lists
-
-        **UI path:** Account -> Lists.
-        """
-
-        response = self._session.get_json("/lists/account", params={"itemId": ""})
-
-        if only_ids:
-            return [obj["id"] for obj in response]
-
-        result: list[dict] = []
-        for list_info in response:
-            result.append(
-                {
-                    "id": list_info["id"],
-                    "label": list_info["label"],
-                }
-            )
-        return result
-
-    def add_list(self, label: str, description: str = "") -> str:
-        data = {"label": label, "description": description}
-        self._session.post_json("/lists", json=data)["id"]
-
-    def delete_list(self, list_id: str | None = None) -> None:
-        self._session.post_json("/lists/remove", json={"listId": list_id})
-
-    def get_list_items(self, list_id: str) -> list[str]:
-        """
-        Get all items of a specific list
-
-        **UI path:** Account -> Lists -> <List Name>.
-        """
-        response = self._session.get_json("/lists/items", params={"listId": list_id})
-        return [obj["id"] for obj in response]
-
-    def add_list_item(self, *, list_id: str, account_id: str) -> None:
-        data = {
-            "listCommands": [
-                {
-                    "listItem": {
-                        "id": account_id,
-                        "listId": list_id,
-                    },
-                    "type": 1,
-                },
-            ],
-        }
-        self._session.post_json("/lists/commands", json=data)
-
-    def add_list_items(self, *, list_id: str, accounts_ids: Iterable[str]) -> None:
-        if not accounts_ids:
-            return
-
-        commands: list[dict] = []
-        for account_id in accounts_ids:
-            commands.append(
-                {
-                    "listItem": {
-                        "id": account_id,
-                        "listId": list_id,
-                    },
-                    "type": 1,
-                }
-            )
-
-        self._session.post_json("/lists/commands", json={"listCommands": commands})
-
-    def delete_list_item(self, *, list_id: str, account_id: str) -> None:
-        """
-        Get all items of a specific list
-
-        **UI path:** Account -> Lists -> <List Name> -> <Item Name> -> Remove Button.
-        """
-        self.delete_list_items(list_id=list_id, account_id=[account_id])
-
-    def delete_list_items(self, *, list_id: str, accounts_ids: Iterable[str]) -> None:
-        """
-        Get all items of a specific list
-
-        **UI path:** Account -> Lists -> <List Name> -> <Item Name> -> Remove Button.
-        """
-        if not accounts_ids:
-            return
-
-        data = {"listId": list_id, "listItemIds": accounts_ids}
-        self._session.post_json("/lists/items/remove", json=data)
-
-
-class _FanslyUserMediaApi:
-    def __init__(self, session: _Session) -> None:
-        self._session = session
-
-    def purchases(self) -> "_FanslyUserMediaPurchasesApi":
-        return _FanslyUserMediaPurchasesApi()
-
-
-class _FanslyUserMediaPurchasesApi:
-    def __init__(self, session: _Session) -> None:
-        self._session = session
-
-    def get_all_accounts(self) -> list[str]:
-        # response = self._session.get("/uservault/albumsnew", params={"accountId": ""})
-        # aggregation_data = response["aggregationData"]["accountMedia"]
-
-        return []  # TODO(obsessedcake): Implement this.
-
-
-class _FanslyUserNotesApi:
-    def __init__(self, root_api: FanslyApi, session: _Session) -> None:
-        self._root_api = root_api
-        self._session = session
-
-    def get_all(self, account_id: str, *, only_ids: bool = True) -> list[dict] | None:
-        account_info = self._root_api.accounts().get(account_id)
-        if not account_info:
-            return None
-
-        notes_info = account_info.get("notes")
-        if not notes_info:
-            return None
-
-        if only_ids:
-            return [note_info["id"] for note_info in notes_info]
-
-        return notes_info
-
-    def add(self, *, account_id: str, title: str, data: str) -> str:
-        data = {
-            "contentId": account_id,
-            "contentType": 12000,
-            "title": title,
-            "data": data,
-        }
-        self._session.post_json("/notes", json=data)["id"]
-
-    def delete(self, *, account_id: str, note_id: str) -> None:
-        data = {
-            # "accountId": user_account_id,
-            "contentId": account_id,
-            "contentType": 12000,
-            # "title": "test",
-            # "note": "test",
-            "id": note_id,
-        }
-        self._session.post_json("/notes/delete", json=data)
+        url = f"/account/{account_id}/followers/remove"
+        self._session.invoke_rate_limited(lambda: self._session.post(url))
 
 
 class _FanslyUserPaymentsApi:
     def __init__(self, session: _Session) -> None:
         self._session = session
 
-    def get_all(self, *, limit: int = DEFAULT_LIMIT_VALUE, offset: int = 0) -> list[dict]:
+    def get_batch(self, *, limit: int = DEFAULT_LIMIT_VALUE, offset: int = 0) -> list[dict]:
         params = {
             "before": 0,
             "after": 0,
@@ -504,13 +715,19 @@ class _FanslyUserPaymentsApi:
         return result
 
 
-# TODO(obsessedcake): I don't have subs right now so I don't know what API endpoints are called
 class _FanslyUserSubscriptionsApi:
     def __init__(self, session: _Session) -> None:
         self._session = session
 
     def get_all(self, *, only_ids: bool = True) -> list[dict] | list[str]:
-        return []  # TODO
+        response = self._session.get_json("/subscriptions")
+        subscriptions = response["subscriptions"]
 
-    def unsubscribe(self, *, account_id: str) -> None:
+        if only_ids:
+            return [obj["id"] for obj in subscriptions]
+
+        return subscriptions
+
+    # TODO(obsessedcake): I don't have subs right now so I don't know what API endpoints is called
+    def unsubscribe(self, *, sub_id: str) -> None:
         pass  # TODO
