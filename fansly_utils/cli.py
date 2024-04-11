@@ -138,6 +138,13 @@ def get_cli_arg_parser() -> ArgumentParser:
         FileType.NONE,
     )
     wipe.add_argument(
+        "-b",
+        "--backup",
+        nargs="?",
+        help="A path to a wipe backup.",
+        default=Path("wipe-backup.txt"),
+    )
+    wipe.add_argument(
         "-s",
         "--silent",
         help="Do not show a warning message.",
